@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0
-pragma solidity =0.8.19;
+pragma solidity ^0.8.19;
 
 import "./interfaces/ILpStaker.sol";
 import "./interfaces/IERC20.sol";
@@ -7,6 +7,12 @@ import "./interfaces/uniswap/INonfungiblePositionManager.sol";
 import "./common/Pausable.sol";
 import "./common/SafeERC20.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
+// 1. How do we stake
+// 2. How do we unstake
+// 3. How do we collect fees
+// 4. Collect fee
+// 5. Extend staking ???
 
 contract LpStaker is ILpStaker, ReentrancyGuard, Pausable, IERC721Receiver {
     using SafeERC20 for IERC20;
@@ -47,6 +53,7 @@ contract LpStaker is ILpStaker, ReentrancyGuard, Pausable, IERC721Receiver {
         minLiquidity = _minLiquidity;
     }
 
+    // @audit what if people can stake without going through this contract/function
     function setCurrentIncentiveKey(IUniswapV3Staker.IncentiveKey memory key) external onlyAdminOrOperator {
         require(key.startTime <= block.timestamp && key.endTime > block.timestamp, "Staker: not stakable incentive key");
         require(address(key.rewardToken) == rewardToken, "Staker: rewardToken is not matched");
@@ -56,7 +63,7 @@ contract LpStaker is ILpStaker, ReentrancyGuard, Pausable, IERC721Receiver {
         require(totalRewardUnclaimed > 0, "Staker: incentive key is not registered");
         
         uint16 _index = currentIndex;
-        if (_index == type(uint16).max) _index = 0;
+        if (_index == type(uint16).max) _index = 0; //@audit this is sus
         else _index += 1;
 
         incentiveKeys[_index] = key;
@@ -97,7 +104,7 @@ contract LpStaker is ILpStaker, ReentrancyGuard, Pausable, IERC721Receiver {
     }
 
     function depositAndStakeLpToken(uint256[] memory tokenIds) external nonReentrant whenNotPaused {
-        for (uint256 i = 0; i < tokenIds.length; i++) {
+        for (uint256 i = 0; i < tokenIds.length; i++) { //@audit initialized default value, uncached tokenIds length, could be unchecked i++
             uint256 tokenId = tokenIds[i];
 
             // transfer token from msg.sender to this contract
@@ -106,7 +113,7 @@ contract LpStaker is ILpStaker, ReentrancyGuard, Pausable, IERC721Receiver {
     }
 
     function unstakeAndWithdrawLpToken(uint256[] memory tokenIds) external nonReentrant {
-        for (uint256 i = 0; i < tokenIds.length; i++) {
+        for (uint256 i = 0; i < tokenIds.length; i++) { //@audit initialized default value, uncached tokenIds length, could be unchecked i++
             uint256 tokenId = tokenIds[i];
 
             // validate requested by owner
@@ -116,6 +123,8 @@ contract LpStaker is ILpStaker, ReentrancyGuard, Pausable, IERC721Receiver {
             _unstakeTokenWithAllIncentives(tokenId, type(uint16).max);
             uint256 _reward = reward[tokenId];
             delete reward[tokenId];
+
+            //@audit check != 0 rather than > 0 for gas optimization for uint's
             if (_reward > 0) IERC20(rewardToken).safeTransfer(idToOwner[tokenId], _reward);
 
             // remove records for staking
@@ -125,6 +134,7 @@ contract LpStaker is ILpStaker, ReentrancyGuard, Pausable, IERC721Receiver {
             delete stakedIndex[tokenId];
 
             // withdraw token from staker
+            //@audit - High Reentrancy here ???
             IUniswapV3Staker(uniswapV3Staker).withdrawToken(tokenId, msg.sender, "");
 
             emit UnstakedAndWithdrawn(msg.sender, tokenId);

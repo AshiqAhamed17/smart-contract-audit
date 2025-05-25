@@ -1,0 +1,6 @@
+[submodule "SimpleDeX-audit/lib/forge-std"]
+	path = SimpleDeX-audit/lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "SimpleDeX-audit/lib/openzeppelin-contracts"]
+	path = SimpleDeX-audit/lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
